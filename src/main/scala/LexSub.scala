@@ -4,7 +4,7 @@ import multitool._
 object LexSub {
 
 
-  def main(args : Array[String]) : Unit = {
+  def mainz(args : Array[String]) : Unit = {
 
     val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
 

@@ -127,7 +127,7 @@ object LogRegTrain {
   import edu.mit.jwi.morph.WordnetStemmer
   import java.io.File
 
-  def main(args : Array[String]) : Unit = {
+  def mainz(args : Array[String]) : Unit = {
 
     val wnetPath = base + "wordnet/WordNet-3.0/dict"
     

@@ -75,7 +75,7 @@ class Lexicon(wordsFile : String) {
 
 object Lexicon {
 
-  def main(args : Array[String]) = {
+  def mainz(args : Array[String]) = {
 
     val lex = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
 

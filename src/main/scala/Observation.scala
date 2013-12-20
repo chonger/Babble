@@ -3,7 +3,7 @@ import multitool.Shuffle
 
 object Observation {
 
-  def main(args : Array[String]) = {
+  def mainz(args : Array[String]) = {
 
     val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
 

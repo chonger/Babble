@@ -3,7 +3,7 @@ import scala.collection.mutable.{HashSet,HashMap}
 
 object Filter {
 
-  def main(args : Array[String]) = {
+  def mainz(args : Array[String]) = {
     
     val st = new CFGSymbolTable()
 
@@ -82,17 +82,13 @@ object Main {
     */
 
     dg.addObservations(tz)
-    dg.limitCounts(2)
     dg.em()
-
-    if(normal) {
-      dg.limit(lexicon,1)
-      dg.prune()
-      dg.normalize()
-    } else {
-      dg.trainSmooth(tz,lexicon)
-      gen = dg.generateSmooth _
-    }
+    dg.firstPass(lexicon)
+    dg.setProbs()
+    //dg.limitCounts(2)
+    //dg.trainSmooth(tz,lexicon)
+    gen = dg.generateSmooth _
+    
 
     //ANALYSIS
 

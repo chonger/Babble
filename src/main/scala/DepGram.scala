@@ -84,8 +84,10 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
     }
   } 
 */
+
+  /**
   def chooseSmooth(c : Context) : Outcome = {
-    val backoffC = Babble.rando.nextDouble() >= backoffFromC(c)
+  val backoffC = Babble.rando.nextDouble() >= backoffFromC(c)
     if(backoffC) {
       val sC = smoothC(c)
       val backoffO = Babble.rando.nextDouble() >= backoffOfromSC(c)
@@ -117,7 +119,280 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
       }
     }
   }
+  */
+
+  val probs = new HashMap[Context,HashMap[Outcome,Double]]()
+
+  def getRealProbs(context : Context) : HashMap[Outcome,Double] = {
+    val lam = lambda.getOrElse(context,0.0) //we might as for a unseen true context
+    val sC = smoothC(context)
+    val outs = new HashMap[Outcome,Double]()
+    if(lam > 0) { //theres some real prob
+      val gamC = gammaC(context)
+      full_OC(context).iterator.foreach(o => addmap(o._1,lam*gamC*o._2,outs))
+      full_sOC(context).iterator.foreach(sO => {
+        val p1 = sO._2
+        full_OsO(sO._1).iterator.foreach(o => {
+          val v = lam*(1.0-gamC)*p1*o._2
+          addmap(o._1,v,outs)
+        })
+      })
+    }
+    
+    val gamSC = gammaSC(sC)    //the smooth Context MUST be there
+    full_OsC(sC).iterator.foreach(o => addmap(o._1,(1.0 - lam)*gamSC*o._2,outs))
+    full_sOsC(sC).iterator.foreach(sO => {
+      val p1 = sO._2
+      full_OsO(sO._1).iterator.foreach(o => {
+        val v = (1.0-lam)*(1.0-gamSC)*p1*o._2
+        addmap(o._1,v,outs)
+      })
+    })
+    outs
+  }
   
+  def setProbs() = {
+    println("SET PROBS!!!!!")
+    val allContexts = getAllContexts() //this is all consistent contexts
+
+    //assumes every C -> smoothOutcome (C,0) is in realProbs
+    //this is true - smoothOutcomes are the consistent subset of connections
+    //realProbs is the full
+    
+    val edges = new HashMap[Context,HashMap[Context,Double]]()
+
+    allContexts.foreach(c => {
+      val outs = outcomesSmooth(c)
+      val oprobs = getRealProbs(c)
+      outs.iterator.foreach(o => {
+        val d = oprobs(o)
+        implies(c,o).foreach(cc => {
+          assert(allContexts contains cc)
+          addmap(cc,d,edges.getOrElseUpdate(c,new HashMap[Context,Double]()))
+        })
+      })
+    }) 
+
+    import scala.collection.mutable.ArrayBuffer
+    //do topo sort
+    var tEdges = new ArrayBuffer[(Context,Context,Double)]()
+
+    tEdges ++= edges.iterator.flatMap(x => x._2.map(y => (x._1,y._1,y._2))).toArray.sortWith(_._3 > _._3)
+
+    /**
+    println("Drop cycles - " + tEdges.length + " edges to check")
+    
+    def checkEdge(s : Context, t : Context) : Boolean = {
+      var proc = List[Context](t)
+      while(proc.length > 0) {
+        var cur = proc(0)
+        if(cur == s) 
+          return false
+        proc = kEdges.getOrElse(cur,new HashMap[Context,Double]()).keysIterator.toList ::: proc.drop(1)
+      } 
+      true
+    }
+    tEdges.foreach(e => {
+      if(checkEdge(e._1,e._2))
+        addmap(e._2,e._3,kEdges.getOrElseUpdate(e._1,new HashMap[Context,Double]()))
+    })
+    */
+
+    def bSearch(st : Int, end : Int) : List[Context] = {
+      var half = (st + end) / 2
+      if(st + 1 == end)
+        half += 1
+      //println("BSEARCH - " + st + " - " + end + " - " + half)
+      
+      val tryTopo = topoSort(tEdges.slice(0,half).toArray)
+      if(st == end) {
+        println("using " + end + " out of " + tEdges.length)
+        if(end < tEdges.length) {
+          tEdges.remove(end)
+          //println("RESTART")
+          return bSearch(st,tEdges.length)
+        } else {
+          return tryTopo
+        }
+      }
+      if(tryTopo == null) {
+        if(st + 1 == end)
+          half -= 1
+        bSearch(st,half)
+      } else {
+        bSearch(half,end)
+      }
+    } 
+    
+    def topoSort(edg : Array[(Context,Context,Double)]) : List[Context] = {
+      //println("Topo sort")
+
+      val kEdges = new HashMap[Context,HashMap[Context,Double]]()
+      edg.foreach(e => {
+          addmap(e._2,e._3,kEdges.getOrElseUpdate(e._1,new HashMap[Context,Double]()))
+      })
+
+      val inDeg = new HashMap[Context,Int]()
+      kEdges.iterator.foreach(_._2.iterator.foreach(x => {
+        val e = inDeg.getOrElse(x._1,0) + 1
+        inDeg += x._1 -> e
+      }))
+      
+      var proc = List[Context]()
+      //if its not in inDeg, its got in degree of 0
+      allContexts.foreach(c => {
+        if(!(inDeg contains c))
+          proc ::= c
+      })
+
+      //println("START NODES - " + proc.length)
+      //assert(proc contains rootContext)
+
+      var topoR = List[Context]()
+      while(proc.length > 0) {
+        var cur = proc(0)
+        proc = proc.drop(1)
+        topoR ::= cur
+        kEdges.getOrElse(cur,new HashMap[Context,Double]()).iterator.foreach(x => {
+          var e = inDeg(x._1)
+          e -= 1
+          inDeg += x._1 -> e
+          if(e == 0) {
+            proc ::= x._1
+          } 
+        })
+      }
+
+      if(topoR.length < allContexts.size)
+        null
+      else
+        topoR
+    }      
+    println(allContexts.size)
+    println(tEdges.length)
+    val topo = bSearch(0,tEdges.length)
+
+    println("Calc Goodness - " + topo.length)
+
+    val goodness = new HashMap[Context,Double]()
+    topo.foreach(c => {
+      var g = 0.0
+      val rp = getRealProbs(c)
+      outcomesSmooth(c).foreach(o => {
+        g += (rp(o) /: implies(c,o))((a,b) => a * goodness.getOrElse(b,0.0))
+      })
+      goodness += c -> g
+    })
+
+    println("root goodness - " + goodness(rootContext))
+
+    allContexts.foreach(c => {
+      val oprobs = getRealProbs(c)
+      val outs = outcomesSmooth(c)
+      val ps = outs.iterator.map(o => {
+        val v = (oprobs(o) /: implies(c,o))((a,b) => {
+          a * goodness(b)
+        })
+        (o,v)
+      }).toList
+
+      val tot = (0.0 /: ps)(_ + _._2)
+      val os = new HashMap[Outcome,Double]() 
+      ps.foreach(x => {
+        val v = x._2/tot
+        os += x._1 -> v
+      })
+      probs += c -> os
+    })
+    
+    println("DONE SET PROBS!!!!!")
+  }
+
+  def chooseSmooth(c : Context) : Outcome = {
+    try {
+      Babble.sample(probs(c).iterator)
+    } catch {
+      case e : Exception => {
+        println(c)
+        probs(c).foreach(x => println(x))
+        throw e
+      }
+    }
+  }
+
+  def outcomesSmooth(c : Context) : List[Outcome] = {
+    val outs = new HashSet[Outcome]()
+    if(trueOuts contains c) {
+      outs ++= trueOuts(c).keysIterator
+    }
+    if(trueSOuts contains c) {
+      trueSOuts(c).keysIterator.foreach(o => {
+        outs ++= smoothedOuts(o).keysIterator
+      })
+    }
+    val sC = smoothC(c)
+    if(backOuts contains sC) {
+      outs ++= backOuts(sC).keysIterator
+    }
+    if(backSOuts contains sC) {
+      backSOuts(sC).keysIterator.foreach(o => {
+        outs ++= smoothedOuts(o).keysIterator
+      })
+    }
+    outs.toList
+  }
+
+  def debugPaths(c : Context) = {
+    var outs = new HashSet[Outcome]()
+    if(trueOuts contains c) {
+      outs ++= trueOuts(c).keysIterator
+      outs.iterator.foreach(o => {println("1" + o)})
+    }
+    outs = new HashSet[Outcome]()
+    if(trueSOuts contains c) {
+      trueSOuts(c).keysIterator.foreach(o => {
+        outs ++= smoothedOuts(o).keysIterator
+      })
+      outs.iterator.foreach(o => {println("2" + o)})
+    }
+    outs = new HashSet[Outcome]()
+    val sC = smoothC(c)
+    if(backOuts contains sC) {
+      outs ++= backOuts(sC).keysIterator
+      outs.iterator.foreach(o => {println("3" + o)})
+    }
+    outs = new HashSet[Outcome]()
+    if(backSOuts contains sC) {
+      backSOuts(sC).keysIterator.foreach(o => {
+        outs ++= smoothedOuts(o).keysIterator
+      })
+      outs.iterator.foreach(o => {println("4" + o)})
+    }
+/**
+    val lam = lambda.getOrElse(context,0.0) //we might as for a unseen true context
+    val sC = smoothC(context)
+    val outs = new HashMap[Outcome,Double]()
+    if(lam > 0) { //theres some real prob
+      val gamC = gammaC(context)
+      full_OC(context).iterator.foreach(o => println("!1" + o._1))
+      full_sOC(context).iterator.foreach(sO => {
+        full_OsO(sO._1).iterator.foreach(o => {
+          lam*(1.0-gamC)*p1*o._2
+        })
+      })
+    }
+    
+    val gamSC = gammaSC(sC)    //the smooth Context MUST be there
+    full_OsC(sC).iterator.foreach(o => addmap(o._1,(1.0 - lam)*gamSC*o._2,outs))
+    full_sOsC(sC).iterator.foreach(sO => {
+      val p1 = sO._2
+      full_OsO(sO._1).iterator.foreach(o => {
+        (1.0-lam)*(1.0-gamSC)*p1*o._2
+      })
+    })
+*/
+  }
+
   def generate() : DepNode = compose(rootContext,choose)
   def generateSmooth() : DepNode = compose(rootContext,chooseSmooth)
   def compose(c : Context, f : (Context) => Outcome) : DepNode
@@ -134,15 +409,9 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
    */
 
   def trainSmooth(trees : Array[DepNode], lexicon : Lexicon) = {
-    //genProbs.clear()
-    //addObservations(trees)
-    //limitCounts(2)
-//    limit(lexicon,1) 
-  //  prune()
     firstPass(lexicon) // use the in vocab observations to define a set of smoothed context/outcomes
-    //genProbs.clear()
-    //addObservations(trees)
-    secondPass() // add in all counts restricted to "good" smoothed c/o's
+    //secondPass() // add in all counts restricted to "good" smoothed c/o's
+
     normSmooth()
   }
 
@@ -164,9 +433,8 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
       }
     })
 
-  }
-  
-  
+  }  
+
   def firstPass(lexicon : Lexicon) = {
     
     //in the first pass we detemine the C', O' and O sets that we 
@@ -456,7 +724,6 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
     })    
   }
 
-
   def em() = {
 
     //init branch probs 
@@ -563,83 +830,13 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
 
     }
 
-    0.until(10).foreach(i => {
+    0.until(3).foreach(i => {
       println(i)
       iter()
     })
 
   }
-  
-  def secondPass() = {
 
-    //now we need to estimate all the probs
-    
-    zeroOut(smoothedOuts)
-    zeroOut(backOuts)
-    zeroOut(backSOuts)
-    zeroOut(trueOuts)
-    zeroOut(trueSOuts)
-    
-    genProbs.iterator.foreach({
-      case (context,outs) => {
-        val lambdaC = backoffFromC(context)
-        if(lambdaC > 0) { //its a valid full context
-          outs.iterator.foreach({
-            case (o,c) => {
-              val lambda2 = backoffOfromC(context)
-              if(lambda2 > 0) {
-                val m = trueOuts(context)
-                if((m contains o) && lambda2 > 0) {
-                  //its a valid full outcome too, and so the pair would be in the initial sweep
-                  addmap(o,lambdaC*lambda2*c,m)
-                }
-              }
-              if(lambda2 < 1) {
-                val m2 = trueSOuts(context)
-                val oS = smoothO(o)
-                val myC = lambdaC*(1.0-lambda2)*c
-                if(m2 contains oS)
-                  addmap(oS,myC,m2)
-
-                if(smoothedOuts contains oS) { 
-                  //its a valid sO, but might be new with this context
-                  addmap(o,myC,smoothedOuts(oS))
-                }
-              }
-            }
-          })
-        }
-
-        val cSmooth = smoothC(context)
-        
-        if((backOuts contains cSmooth) || (backSOuts contains cSmooth)) { //smooth C is valid
-          val lambdaSC = backoffOfromSC(cSmooth)
-          outs.iterator.foreach({
-            case (o,c) => {
-              if(lambdaSC > 0) { //ST
-                val m = backOuts(cSmooth)
-                if(m contains o) {
-                  addmap(o,(1.0-lambdaC)*lambdaSC*c,m)
-                }
-              }
-              if(lambdaSC < 1) { //SS
-                val m2 = backSOuts(cSmooth)
-                val oS = smoothO(o)
-                if(m2 contains oS) {
-                  addmap(oS,(1.0-lambdaC)*(1.0-lambdaSC)*c,m2)
-                }
-                if((smoothedOuts contains oS) && (smoothedOuts(oS) contains o)) { 
-                  val myC = (1.0 - lambdaC)*(1.0 - lambdaSC)*c
-                  addmap(o,myC,smoothedOuts(oS))
-                }
-              }
-            }
-          })
-        }
-      }
-    })
-
-  }
 
   def normSmooth() = {
      //normalize all
@@ -798,25 +995,7 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
 
   }
 
-  def outcomesSmooth(c : Context) : List[Outcome] = {
-    val outs = new HashSet[Outcome]()
-    if(trueOuts contains c) {
-      outs ++= trueOuts(c).keysIterator
-      trueSOuts(c).keysIterator.foreach(o => {
-        outs ++= smoothedOuts(o).keysIterator
-      })
-    }
-    val sC = smoothC(c)
-    if(backOuts contains sC) {
-      outs ++= backOuts(sC).keysIterator
-    }
-    if(backSOuts contains sC) {
-      backSOuts(sC).keysIterator.foreach(o => {
-        outs ++= smoothedOuts(o).keysIterator
-      })
-    }
-    outs.toList
-  }
+
 /**
   def outcomesSmoothWithP(c : Context) : List[(Outcome,Double)] = {
     val outs = new HashMap[Outcome,Double]()
@@ -1030,7 +1209,78 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
 */
 
 
+/**  
+  def secondPass() = {
 
+    //now we need to estimate all the probs
+    
+    zeroOut(smoothedOuts)
+    zeroOut(backOuts)
+    zeroOut(backSOuts)
+    zeroOut(trueOuts)
+    zeroOut(trueSOuts)
+    
+    genProbs.iterator.foreach({
+      case (context,outs) => {
+        val lambdaC = backoffFromC(context)
+        if(lambdaC > 0) { //its a valid full context
+          outs.iterator.foreach({
+            case (o,c) => {
+              val lambda2 = backoffOfromC(context)
+              if(lambda2 > 0) {
+                val m = trueOuts(context)
+                if((m contains o) && lambda2 > 0) {
+                  //its a valid full outcome too, and so the pair would be in the initial sweep
+                  addmap(o,lambdaC*lambda2*c,m)
+                }
+              }
+              if(lambda2 < 1) {
+                val m2 = trueSOuts(context)
+                val oS = smoothO(o)
+                val myC = lambdaC*(1.0-lambda2)*c
+                if(m2 contains oS)
+                  addmap(oS,myC,m2)
+
+                if(smoothedOuts contains oS) { 
+                  //its a valid sO, but might be new with this context
+                  addmap(o,myC,smoothedOuts(oS))
+                }
+              }
+            }
+          })
+        }
+
+        val cSmooth = smoothC(context)
+        
+        if((backOuts contains cSmooth) || (backSOuts contains cSmooth)) { //smooth C is valid
+          val lambdaSC = backoffOfromSC(cSmooth)
+          outs.iterator.foreach({
+            case (o,c) => {
+              if(lambdaSC > 0) { //ST
+                val m = backOuts(cSmooth)
+                if(m contains o) {
+                  addmap(o,(1.0-lambdaC)*lambdaSC*c,m)
+                }
+              }
+              if(lambdaSC < 1) { //SS
+                val m2 = backSOuts(cSmooth)
+                val oS = smoothO(o)
+                if(m2 contains oS) {
+                  addmap(oS,(1.0-lambdaC)*(1.0-lambdaSC)*c,m2)
+                }
+                if((smoothedOuts contains oS) && (smoothedOuts(oS) contains o)) { 
+                  val myC = (1.0 - lambdaC)*(1.0 - lambdaSC)*c
+                  addmap(o,myC,smoothedOuts(oS))
+                }
+              }
+            }
+          })
+        }
+      }
+    })
+
+  }
+*/
 
 
 }

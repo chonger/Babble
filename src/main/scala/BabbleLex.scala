@@ -161,7 +161,7 @@ class SimpleBabbleLex(val pcfg : PTSG) extends BabbleLex {
 
 object BabbleLex extends BabbleLex {
 
-  def main(args : Array[String]) : Unit = {
+  def mainz(args : Array[String]) : Unit = {
     
     val st= new CFGSymbolTable() 
 
