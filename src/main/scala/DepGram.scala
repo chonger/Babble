@@ -122,12 +122,45 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
   */
 
   val probs = new HashMap[Context,HashMap[Outcome,Double]]()
+  val cprobs = new HashMap[Context,Double]()
+
+  def getContextProbs(maxDepth : Int) = {
+    var cur = new HashMap[Context,Double]()
+    cur += rootContext -> 1.0
+
+    0.until(maxDepth).foreach(i => {
+      var next = new HashMap[Context,Double]()
+      var totEx = 0.0
+      cur.iterator.foreach({
+        case (c,count) => {
+          probs(c).foreach({
+            case (o,d) => {
+              implies(c,o).foreach(cc => {
+                addmap(cc,d*count,next)
+              })
+            }
+          })
+          totEx += count
+          addmap(c,count,cprobs)
+        }
+      })
+      cur = next
+      println("TOTAL Expected context counts - " + totEx)
+    })
+    cur.iterator.foreach({case (c,count) => addmap(c,count,cprobs)})
+    normalize(cprobs)
+  }
+
 
   def getRealProbs(context : Context) : HashMap[Outcome,Double] = {
     val lam = lambda.getOrElse(context,0.0) //we might as for a unseen true context
     val sC = smoothC(context)
     val outs = new HashMap[Outcome,Double]()
     if(lam > 0) { //theres some real prob
+//      println("!")
+  //    println(genProbs contains context)
+    //  println(full_sOC contains context)
+      //println(full_OC contains context)
       val gamC = gammaC(context)
       full_OC(context).iterator.foreach(o => addmap(o._1,lam*gamC*o._2,outs))
       full_sOC(context).iterator.foreach(sO => {
@@ -304,7 +337,9 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
       })
       probs += c -> os
     })
-    
+
+    probs.foreach(x => normalize(x._2))
+    getContextProbs(15)
     println("DONE SET PROBS!!!!!")
   }
 
@@ -393,6 +428,10 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
 */
   }
 
+  def chooseBasic(c : Context) : Outcome = {
+    Babble.sample(getRealProbs(c))
+  }
+
   def generate() : DepNode = compose(rootContext,choose)
   def generateSmooth() : DepNode = compose(rootContext,chooseSmooth)
   def compose(c : Context, f : (Context) => Outcome) : DepNode
@@ -422,6 +461,7 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
   }
 
   def limitCounts(n : Int) = {
+    println("LIMITING - starting with " + (0 /: genProbs.iterator)(_ + _._2.size))
     genProbs.iterator.foreach({
       case (context,outs) => {
         outs.iterator.foreach({
@@ -430,10 +470,14 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
               outs -= o
           }
         })
+        if(outs.size == 0)
+          genProbs -= context
       }
     })
-
+    println("LIMITING - ending with " + (0 /: genProbs.iterator)(_ + _._2.size))
   }  
+
+
 
   def firstPass(lexicon : Lexicon) = {
     

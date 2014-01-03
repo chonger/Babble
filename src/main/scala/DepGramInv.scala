@@ -1,8 +1,7 @@
 import multitool._
 import scala.collection.mutable.{HashMap,HashSet}
 
-class DepGramInv[Context <: Lookup,Outcome <: Lookup](val dg : DepGramBase[Context,Outcome], val maxD : Int) {
- 
+class DepGramInv[Context <: Lookup,Outcome <: Lookup](val dg : DepGramBase[Context,Outcome], val maxD : Int) { 
 
   val allContexts = dg.getAllContexts()
   
@@ -19,10 +18,11 @@ class DepGramInv[Context <: Lookup,Outcome <: Lookup](val dg : DepGramBase[Conte
   })
   
   def startContext(w : String) = {
-    val poss = allContexts.filter(_.hasWord(w)).toSeq
-    assert(poss.length > 0)
-    //println("POSSIBLE STARTS = " + poss.length)
-    poss(Babble.rando.nextInt(poss.length))
+    val poss = new HashMap[Context,Double]()
+    dg.cprobs.filter(_._1.hasWord(w)).foreach(x => poss += x._1 -> x._2)
+    dg.normalize(poss)
+    assert(poss.size > 0)
+    Babble.sample(poss.iterator)
   }
 
   def generateUp(w : String) : DepNode = {
@@ -32,13 +32,20 @@ class DepGramInv[Context <: Lookup,Outcome <: Lookup](val dg : DepGramBase[Conte
     var cPath = List[(Context,Outcome)]()
 
     while(cur != dg.rootContext) {
-      val co = inputs(cur)(Babble.rando.nextInt(inputs(cur).length))
+
+      val poss = new HashMap[(Context,Outcome),Double]()
+      inputs(cur).foreach(x => {
+        val p = dg.cprobs(x._1) * dg.probs(x._1)(x._2)
+        poss += x -> p
+      })
+
+      dg.normalize(poss)
+      val co = Babble.sample(poss.iterator)
       cPath ::= co
       cur = co._1
     }
     
     //cPath.foreach(x => println(x._1 + " -------> " + x._2))
-
 
     dg.composeChain(cPath,dg.chooseSmooth)
 

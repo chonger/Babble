@@ -82,10 +82,11 @@ object Main {
     */
 
     dg.addObservations(tz)
+    dg.limitCounts(2)
     dg.em()
     dg.firstPass(lexicon)
     dg.setProbs()
-    //dg.limitCounts(2)
+
     //dg.trainSmooth(tz,lexicon)
     gen = dg.generateSmooth _
     
