@@ -2,6 +2,41 @@ import multitool._
 import scala.collection.mutable.{HashSet,HashMap}
 import java.io._
 
+object Wordlister {
+  
+  def main(args : Array[String]) : Unit = {
+    val st = new CFGSymbolTable()
+    val tz = st.read("/home/chonger/data/generate/simplewiki/newwiki3.ptb")
+    var bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/ex/sents.txt"))
+    tz.foreach(t => {
+      bw.write(t.sentence(st) +"\n")
+    })
+    bw.close()
+  }
+  
+  def poo() : Unit = {
+    val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
+    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/newwiki3.ptb")
+
+    val goodW = new HashSet[String]()
+    tz.foreach(t => {
+      t.seq().map(z => DepNode.words(z._2).toLowerCase()).foreach(w => {
+        if(lexicon.inVocab(w))
+          goodW += w
+      })
+    })
+    
+    var bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/rejects/goodW.txt"))
+    goodW.iterator.foreach(w => {
+      bw.write(w + "\n")
+    })
+    bw.close()
+    
+  }
+
+}
+
+
 object VocabRejector {
 
   def main(args : Array[String]) : Unit = {
@@ -16,7 +51,7 @@ object VocabRejector {
     var fails = 0
     var rejects = 0
     var counts = new HashMap[String,Int]()
-    0.until(100000).foreach(i => {
+    0.until(1000000).foreach(i => {
       if(i % 1000 == 0)
         println(i + " F : " + fails + " R : " + rejects)
       try {
