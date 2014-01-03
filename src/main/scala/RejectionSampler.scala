@@ -15,7 +15,7 @@ object VocabRejector {
 
     var fails = 0
     var rejects = 0
-    
+    var counts = new HashMap[String,Int]()
     0.until(100000).foreach(i => {
       if(i % 1000 == 0)
         println(i + " F : " + fails + " R : " + rejects)
