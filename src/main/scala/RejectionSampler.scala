@@ -39,21 +39,29 @@ object CompareSmooth {
 
   def main(args : Array[String]) : Unit = {
 
+    var xtype = ""
+
+    while(xtype == "") {
+      println("Which one? (U/S)")
+      val s = readLine().trim
+      if(s == "U" || s == "S")
+        xtype = s
+    }
+
     //US - 1715
 
     val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
-    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/newwiki3.ptb")
+    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/small.ptb")
     //val tz = DepNode.read("/home/chonger/data/generate/simplewiki/med.ptb")
     
-    val dg = new AllWordsF(lexicon)
-    //val dg = new AllWordsUS(lexicon)
+    val dg = if(xtype == "S") new AllWordsF(lexicon) else new AllWordsUS(lexicon)
     dg.addObservations(tz)
     dg.limitCounts(2)
     dg.em()
     dg.firstPass(lexicon)
     dg.setProbs()
 
-    var bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/rejects/US.txt"))
+    var bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/rejects/" + xtype + ".txt"))
     0.until(100).foreach(i => {
       val t = dg.generateSmooth()
       val s = t.sentence()
