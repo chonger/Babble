@@ -92,7 +92,6 @@ object Main {
     
 
     //ANALYSIS
-
     
     println("REGULAR")
 

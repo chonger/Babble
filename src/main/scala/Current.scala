@@ -273,3 +273,11 @@ class AllWordsF(lexicon : Lexicon) extends AllWords(lexicon) {
 }
 
 
+class AllWordsUS(lexicon : Lexicon) extends AllWords(lexicon) {
+  override def smoothC(c : NGramContext) : Any = c
+  override def smoothO(o : AllOutcome) : Any = o
+  override def smoothImplies(a : Any, o : AllOutcome) : List[Any] = {
+    implies(a.asInstanceOf[NGramContext],o)
+  }
+}
+

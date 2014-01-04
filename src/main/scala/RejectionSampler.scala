@@ -30,8 +30,45 @@ object Wordlister {
     goodW.iterator.foreach(w => {
       bw.write(w + "\n")
     })
-    bw.close()
+    bw.close() 
+  }
+}
+
+
+object CompareSmooth {
+
+  def main(args : Array[String]) : Unit = {
+
+    //US - 1715
+
+    val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
+    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/newwiki3.ptb")
+    //val tz = DepNode.read("/home/chonger/data/generate/simplewiki/med.ptb")
     
+    val dg = new AllWordsF(lexicon)
+    //val dg = new AllWordsUS(lexicon)
+    dg.addObservations(tz)
+    dg.limitCounts(2)
+    dg.em()
+    dg.firstPass(lexicon)
+    dg.setProbs()
+
+    var bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/rejects/US.txt"))
+    0.until(100).foreach(i => {
+      val t = dg.generateSmooth()
+      val s = t.sentence()
+      bw.write(s + "\n")
+    })
+    bw.close()
+
+    val ss = new HashSet[String]()
+    0.until(100000).foreach(i => {
+      val t = dg.generateSmooth()
+      val s = t.sentence()
+      ss += s
+    })
+    println("Uniq in 100000 - " + ss.size)
+
   }
 
 }
