@@ -51,7 +51,7 @@ object CompareSmooth {
     //US - 1715
 
     val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
-    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/small.ptb")
+    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/newwiki3.ptb")
     //val tz = DepNode.read("/home/chonger/data/generate/simplewiki/med.ptb")
     
     val dg = if(xtype == "S") new AllWordsF(lexicon) else new AllWordsUS(lexicon)
