@@ -89,7 +89,7 @@ object EvalApprox {
     val NUMS = 300
 
     val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
-    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/med.ptb")
+    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/newwiki3.ptb")
     val dg = new AllWordsF(lexicon)
     dg.addObservations(tz)
     dg.limitCounts(2)
