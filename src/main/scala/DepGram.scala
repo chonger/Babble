@@ -874,7 +874,7 @@ abstract class DepGramBase[Context <: Lookup,Outcome <: Lookup] {
 
     }
 
-    0.until(3).foreach(i => {
+    0.until(20).foreach(i => {
       println(i)
       iter()
     })

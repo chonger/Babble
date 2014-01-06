@@ -82,6 +82,70 @@ object CompareSmooth {
 }
 
 
+object EvalApprox {
+
+  def main(args : Array[String]) : Unit = {
+
+    val NUMS = 300
+
+    val lexicon = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
+    val tz = DepNode.read("/home/chonger/data/generate/simplewiki/med.ptb")
+    val dg = new AllWordsF(lexicon)
+    dg.addObservations(tz)
+    dg.limitCounts(2)
+    dg.em()
+
+    println("REJECTION SAMPLER")
+    var bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/rejects/EX2_RS.txt"))
+    var nGen = 0
+    while(nGen < NUMS) {
+      try {
+        val t = dg.compose(dg.rootContext,dg.chooseBasic)
+        val ws = t.seq().map(z => DepNode.words(z._2).toLowerCase())
+        if((true /: ws)((y,z) => y && lexicon.inVocab(z))) {
+          val s = ws.mkString(" ")
+          bw.write(s + "\n")
+          nGen += 1
+        } 
+      } catch {
+        case e : Exception => {
+          //do nothing
+        }
+      }
+    }
+    bw.close()
+
+    println("ESTIMATED SAMPLER")
+    bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/rejects/EX2_EST.txt"))
+    dg.firstPass(lexicon)
+    dg.setProbs()
+    0.until(NUMS).foreach(i => {
+      val t = dg.generateSmooth()
+      val s = t.sentence()
+      bw.write(s + "\n")
+    })
+    bw.close()
+
+    println("UNIFORM SAMPLER")
+    bw = new BufferedWriter(new FileWriter("/home/chonger/data/generate/rejects/EX2_UNI.txt"))
+    dg.probs.foreach({
+      case (c,os) => {
+        var v = 1.0 / os.size
+        os.iterator.foreach(x => {
+          os += x._1 -> v
+        })
+      }
+    })
+    0.until(NUMS).foreach(i => {
+      val t = dg.generateSmooth()
+      val s = t.sentence()
+      bw.write(s + "\n")
+    })
+    bw.close()
+  }
+
+}
+
 object VocabRejector {
 
   def main(args : Array[String]) : Unit = {
@@ -96,7 +160,7 @@ object VocabRejector {
     var fails = 0
     var rejects = 0
     var counts = new HashMap[String,Int]()
-    0.until(1000000).foreach(i => {
+    0.until(4000).foreach(i => {
       if(i % 1000 == 0)
         println(i + " F : " + fails + " R : " + rejects)
       try {
