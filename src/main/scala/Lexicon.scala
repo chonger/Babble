@@ -1,4 +1,3 @@
-
 import edu.mit.jwi.Dictionary
 import edu.mit.jwi.morph.WordnetStemmer
 import edu.mit.jwi.item.{POS,Pointer}
@@ -7,28 +6,65 @@ import scala.collection.mutable.{HashMap,HashSet}
 import scala.collection.JavaConversions._
 import multitool._
 
-class Lexicon(wordsFile : String) {
+abstract class ALexicon() {
 
-  val base = "/home/chonger/data/generate/"
-  val snlg = new simplenlg.lexicon.XMLLexicon(base + "simplenlg/simplenlg-v44/res/default-lexicon.xml")
-  val wnetPath = base + "wordnet/WordNet-3.0/dict"
-  val dict = new Dictionary(new File(wnetPath))
-  dict.open()
+  def getBase(s : String) : String
+  def inVocab(s : String) : Boolean 
+  def getClass(w : String, pos : String) : Int 
 
-  val vocab = new HashSet[String]()
-    
-  io.Source.fromFile(wordsFile).getLines.foreach(x => {
-    vocab += x.trim().toLowerCase()
-  })
+}
 
+class DummyLexicon() extends ALexicon {
+
+  def getBase(s : String) : String = ""
+  def inVocab(s : String) : Boolean = false
+  def getClass(w : String, pos : String) : Int = -1 
+
+}
+
+class Lexicon(val vocab : HashSet[String]) extends ALexicon {
+
+  val base = "src/main/resources/"
+  val snlg = new simplenlg.lexicon.XMLLexicon(getClass().getResource("/default-lexicon.xml").toURI)
 
   def getBase(s : String) = snlg.getWordFromVariant(s).getBaseForm()
-  
   def inVocab(s : String) = vocab contains getBase(s) 
-
-  val hypos = new SymbolTable()
   
-  def addHNym(w : String, pos : String) : Int = {
+  def getClass(w : String, pos : String) : Int = -1
+
+}
+
+class Word2VecLexicon(cFile : String, words : HashSet[String]) extends Lexicon(words) {
+
+  val clusts = new HashMap[String,Int]()
+
+  io.Source.fromFile(cFile).getLines.foreach(l => {
+    val p = l.trim.split("\\s")
+    val w = p(0)
+    val c = Integer.parseInt(p(1))
+    clusts += w -> c
+  })
+
+  override def getClass(w : String, pos : String) : Int = clusts.getOrElse(w,-1)
+}
+
+import java.net.URL
+class WNetLexicon(wnetURI : File, words : HashSet[String]) extends Lexicon(words) {
+  
+  def this(wnetPath : String, words : HashSet[String]) {
+    this(new File(wnetPath),words)
+  }
+
+  def this(words : HashSet[String]) {
+    this(new File(getClass().getClassLoader().getResource("dict").toURI),words)
+  }
+ 
+  val dict = new Dictionary(wnetURI)
+  dict.open()
+  val wClass = new SymbolTable() //cache wordnet glosses
+
+
+  override def getClass(w : String, pos : String) : Int = {
     val wnPos = pos match {
       case "NN" => POS.NOUN
       case "NNS" => POS.NOUN
@@ -58,12 +94,7 @@ class Lexicon(wordsFile : String) {
         val hs = hsets(hsets.length - 1)
         val hhs = dict.getSynset(hs)
         val g = hhs.getGloss()
-        /**
-         hhs.getWords().foreach(hw => {
-         println(hw.getLemma())
-         })
-         */ 
-        return hypos.add(g)
+        return wClass.add(g)
       } 
     } 
 
@@ -71,35 +102,7 @@ class Lexicon(wordsFile : String) {
     
   }
 
-}
-
-object Lexicon {
-
-  def mainz(args : Array[String]) = {
-
-    val lex = new Lexicon("/home/chonger/data/generate/vocab/A1_words.txt")
-
-    val ws = List("dogs","dog","school","shampoo","cat","fish","rope","soap")
-
-    ws.foreach(w => {
-      println()
-      println("Word : " + w)
-      println("Base : " + lex.getBase(w))
-      println("HYPONYMS")
-      lex.dict.getIndexWord(lex.getBase(w),POS.NOUN).getWordIDs().slice(0,1).toList.foreach(x => {
-        val ss = lex.dict.getWord(x).getSynset()
-        ss.getRelatedSynsets(Pointer.HYPERNYM).foreach(hs => {
-          val hhs = lex.dict.getSynset(hs)
-          println("! " + hhs.getGloss())
-          hhs.getWords().foreach(hw => {
-            println(hw.getLemma())
-          })
-        })
-      })
-
-    })
-
-  }
 
 }
+
 

@@ -1,11 +1,11 @@
 import AssemblyKeys._
 
-
+scalaVersion := "2.10.3"
 
 assemblySettings
 
-
-libraryDependencies += "cc.mallet" % "mallet" % "2.0.7-RC2"
+scalacOptions ++= Seq("-unchecked","-deprecation")
 
 libraryDependencies += "edu.mit" % "jwi" % "2.2.1"
 
+libraryDependencies += "org.twitter4j" % "twitter4j-core" % "[4.0,)"
